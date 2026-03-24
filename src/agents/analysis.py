@@ -50,7 +50,10 @@ RULES:
 - Always call get_dataset_summary first
 - Use EXACT numbers from tool results — do not estimate or round differently
 - If a waste detector returns null, note it as "not detected" — do not invent waste
-- Be specific: name models, features, and dollar amounts"""
+- Be specific: name models, features, and dollar amounts
+- NEVER claim "quality retention" percentages — error rates measure API failures, \
+not output quality. You may compare observed error rates between models, but do NOT \
+extrapolate them into a quality retention score"""
 
 
 def _is_light_model(model: str) -> bool:
@@ -224,8 +227,9 @@ def detect_wrong_model(
         pattern_type="wrong_model",
         description=(
             f"{wrong_count} calls use frontier models for tasks "
-            f"that {config.light_model} could handle. "
-            f"Switching would save ${total_waste:.2f}."
+            f"classified as simple/moderate. Switching to "
+            f"{config.light_model} would save ${total_waste:.2f} "
+            f"(requires output quality validation)."
         ),
         affected_calls=wrong_count,
         estimated_waste_usd=round(total_waste, 2),

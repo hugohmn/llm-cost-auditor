@@ -58,7 +58,10 @@ RULES:
 - Each recommendation must be specific and actionable (not "consider optimizing")
 - Priority 1 = highest impact, easiest to implement
 - Provide 3-7 recommendations, covering routing, caching, and prompt optimization
-- Use exact dollar amounts from simulations"""
+- Use exact dollar amounts from simulations
+- NEVER claim "quality retention" percentages — error rates measure API failures \
+only, not output quality. State observed error rates when relevant, but do NOT \
+fabricate quality scores or retention metrics"""
 
 
 async def run_optimization_agent(

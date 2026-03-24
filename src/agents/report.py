@@ -36,6 +36,13 @@ Structure:
 3. Recommended actions with expected impact
 4. Bottom line (total potential savings, implementation priority)
 
+IMPORTANT RULES:
+- NEVER claim "quality retention" percentages — error rates in the data measure \
+API failures (timeouts, rate limits), not output quality. You may cite observed \
+error rates, but do NOT fabricate quality scores or retention metrics.
+- State that output quality validation requires an eval set when recommending \
+model switches.
+
 OUTPUT: Write the summary as plain text (not JSON). This will be read \
 directly by the CTO."""
 

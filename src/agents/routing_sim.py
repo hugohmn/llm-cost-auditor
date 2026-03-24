@@ -43,6 +43,10 @@ Each recommendation must be a JSON object:
   "details": "Technical implementation steps"
 }
 
+IMPORTANT: NEVER claim "quality retention" percentages. Error rates measure \
+API failures only, not output quality. You may cite observed error rates when \
+relevant, but do NOT fabricate quality scores.
+
 Respond ONLY with a JSON array of recommendations."""
 
 
