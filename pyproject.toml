@@ -1,0 +1,35 @@
+[project]
+name = "llm-cost-auditor"
+version = "0.1.0"
+description = "Autonomous multi-agent system that audits LLM usage and delivers actionable cost optimization recommendations"
+requires-python = ">=3.12"
+license = "MIT"
+
+dependencies = [
+    "anthropic>=0.52.0",
+    "openai>=1.60.0",
+    "pydantic>=2.10.0",
+    "langfuse>=2.50.0",
+    "click>=8.1.0",
+    "rich>=13.9.0",
+    "pandas>=2.2.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "TCH"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
