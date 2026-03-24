@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from src.models.analysis import AnalysisResult
+from src.models.quality import QualityAssessment
 from src.models.recommendation import OptimizationPlan
 
 
@@ -20,6 +21,10 @@ class AuditReport(BaseModel):
 
     executive_summary: str = Field(
         description="LLM-generated executive summary",
+    )
+    quality_assessment: QualityAssessment | None = Field(
+        default=None,
+        description="Quality evaluation results (3 layers), when computed.",
     )
 
     @property

@@ -12,6 +12,7 @@ import anthropic
 from src.agents.base import AgentLoopExhaustedError, run_agent_loop
 from src.models.analysis import AnalysisResult
 from src.models.log_entry import LogDataset
+from src.models.quality import QualityAssessment
 from src.models.recommendation import OptimizationPlan
 from src.models.report import AuditReport
 from src.tools.report_tools import build_report_registry
@@ -27,21 +28,29 @@ for a CTO or VP Engineering.
 You have access to tools that retrieve specific data from a completed \
 LLM cost audit. Use them to gather the numbers you need.
 
-After investigation, write a 3-4 paragraph executive summary. Be direct, \
+After investigation, write a 4-5 paragraph executive summary. Be direct, \
 specific, and actionable. Use exact numbers from the tools. No fluff.
 
-Structure:
-1. Current state (spend, volume, key observation)
-2. Main findings (biggest waste sources with methodology)
-3. Recommended actions with expected impact
-4. Bottom line (total potential savings, implementation priority)
+Structure (one paragraph each):
+1. Current state — spend, volume, key observation
+2. Main findings — biggest waste sources with methodology
+3. Quality risk — use `get_quality_evaluation` if it appears in your \
+available tools. Reference proxy signals (output token ratios, confidence \
+levels) and whether LLM-as-Judge was run. If the quality tool is NOT in \
+your tools, state that quality evaluation was not run and that output \
+quality validation is required before any routing changes.
+4. Recommended actions — with expected impact, sequenced by priority
+5. Bottom line — total potential savings, implementation priority
 
 IMPORTANT RULES:
-- NEVER claim "quality retention" percentages — error rates in the data measure \
-API failures (timeouts, rate limits), not output quality. You may cite observed \
-error rates, but do NOT fabricate quality scores or retention metrics.
-- State that output quality validation requires an eval set when recommending \
-model switches.
+- NEVER claim "quality retention" percentages — error rates measure API \
+failures (timeouts, rate limits), not output quality. Do NOT fabricate \
+quality scores or retention metrics.
+- When recommending model switches, reference quality proxy signals and \
+state that output quality validation requires an eval set before production \
+routing (e.g., "proxy signals show comparable output length with STRONG \
+confidence, but a side-by-side eval is required before production routing").
+- Use only data from tool results — do not invent or extrapolate figures.
 
 OUTPUT: Write the summary as plain text (not JSON). This will be read \
 directly by the CTO."""
@@ -52,13 +61,20 @@ You are a senior AI infrastructure consultant writing an executive summary \
 for a CTO or VP Engineering.
 
 Write a 3-4 paragraph executive summary of an LLM cost audit. Be direct, \
-specific, and actionable. Use exact numbers. No fluff.
+specific, and actionable. Use exact numbers from the data provided. No fluff.
 
 Structure:
 1. Current state (spend, volume, key observation)
 2. Main findings (biggest waste sources)
 3. Recommended actions with expected impact
-4. Bottom line (total potential savings)"""
+4. Bottom line (total potential savings)
+
+IMPORTANT RULES:
+- Use only the numbers provided — do not extrapolate or invent figures
+- NEVER claim "quality retention" percentages — error rates measure API failures, \
+not output quality. Do NOT fabricate quality scores
+- When recommending model switches, state that output quality validation is required \
+before production deployment"""
 
 
 async def run_report_agent(
@@ -66,18 +82,19 @@ async def run_report_agent(
     analysis: AnalysisResult,
     optimization: OptimizationPlan,
     client: UnifiedLLMClient,
+    quality: QualityAssessment | None = None,
 ) -> AuditReport:
     """Run agentic report generation with tool-use loop.
 
     Falls back to single LLM call on failure.
     """
     try:
-        summary = await _run_agentic_report(dataset, analysis, optimization, client)
+        summary = await _run_agentic_report(dataset, analysis, optimization, client, quality)
     except (AgentLoopExhaustedError, anthropic.APIError, ValueError) as e:
         logger.warning("Report agent failed, using fallback: %s", e)
         summary = await _generate_fallback_summary(analysis, optimization, client)
 
-    return _assemble_report(dataset, analysis, optimization, summary)
+    return _assemble_report(dataset, analysis, optimization, summary, quality)
 
 
 async def _run_agentic_report(
@@ -85,9 +102,10 @@ async def _run_agentic_report(
     analysis: AnalysisResult,
     optimization: OptimizationPlan,
     client: UnifiedLLMClient,
+    quality: QualityAssessment | None = None,
 ) -> str:
     """Internal: run the agentic report loop."""
-    registry = build_report_registry(dataset, analysis, optimization)
+    registry = build_report_registry(dataset, analysis, optimization, quality)
 
     initial_message = (
         "Write an executive summary for this LLM cost audit.\n\n"
@@ -170,6 +188,7 @@ def _assemble_report(
     analysis: AnalysisResult,
     optimization: OptimizationPlan,
     summary: str,
+    quality: QualityAssessment | None = None,
 ) -> AuditReport:
     """Assemble the final AuditReport."""
     report = AuditReport(
@@ -178,6 +197,7 @@ def _assemble_report(
         analysis=analysis,
         optimization=optimization,
         executive_summary=summary,
+        quality_assessment=quality,
     )
     logger.info("Report generated: %s potential savings", report.headline_savings)
     return report

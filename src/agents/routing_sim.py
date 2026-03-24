@@ -19,6 +19,7 @@ from src.models.recommendation import (
 )
 from src.utils.json_extract import parse_json_response
 from src.utils.llm_client import UnifiedLLMClient, estimate_cost
+from src.utils.model_utils import is_light_model as _is_light_model
 from src.utils.retry import with_retry
 
 logger = logging.getLogger(__name__)
@@ -26,15 +27,15 @@ logger = logging.getLogger(__name__)
 ROUTING_SYSTEM_PROMPT = """\
 You are an LLM cost optimization expert.
 
-Given analysis results and computed waste patterns from an LLM deployment,
+Given analysis results and computed waste patterns from an LLM deployment, \
 generate a prioritized list of actionable optimization recommendations.
 
-The waste pattern numbers below are computed deterministically from the data.
+The waste pattern numbers below are computed deterministically from the data. \
 Use these exact figures in your recommendations. Do not invent alternative numbers.
 
-Each recommendation must be a JSON object:
+Respond ONLY with a JSON array. Each item must have these fields:
 {
-  "priority": 1-5 (1 = highest),
+  "priority": 1-5 (1 = highest ROI),
   "category": "routing | prompt_optimization | caching | model_switch | architecture",
   "title": "Short actionable title",
   "description": "Clear explanation",
@@ -43,17 +44,12 @@ Each recommendation must be a JSON object:
   "details": "Technical implementation steps"
 }
 
-IMPORTANT: NEVER claim "quality retention" percentages. Error rates measure \
-API failures only, not output quality. You may cite observed error rates when \
-relevant, but do NOT fabricate quality scores.
-
-Respond ONLY with a JSON array of recommendations."""
-
-
-def _is_light_model(model: str) -> bool:
-    """Check if a model is a light/cheap model."""
-    lower = model.lower()
-    return "haiku" in lower or "mini" in lower
+RULES:
+- Provide 3-7 recommendations where data supports them
+- If routing_simulation.savings is 0, do not include a routing recommendation
+- NEVER claim "quality retention" percentages — error rates measure API failures \
+only, not output quality. Do NOT fabricate quality scores
+- When recommending model switches, state that quality validation is required"""
 
 
 def _compute_error_rates(

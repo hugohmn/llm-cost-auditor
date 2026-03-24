@@ -18,6 +18,14 @@ class LogEntry(BaseModel):
     feature: str | None = Field(default=None, description="Application feature or endpoint")
     status: str = Field(default="success", description="success | error | timeout")
     metadata: dict[str, str | int | list[str]] = Field(default_factory=dict)
+    input_text: str | None = Field(
+        default=None,
+        description="Raw prompt text, when available in source data.",
+    )
+    output_text: str | None = Field(
+        default=None,
+        description="Raw completion text, when available in source data.",
+    )
 
 
 class LogDataset(BaseModel):

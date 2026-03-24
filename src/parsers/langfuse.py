@@ -14,6 +14,29 @@ from src.utils.llm_client import estimate_cost
 logger = logging.getLogger(__name__)
 
 
+def _extract_text_content(raw: object) -> str | None:
+    """Extract plain text from LangFuse input/output fields.
+
+    These can be: str, dict with 'content' key, list of messages, or None.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        return raw if raw.strip() else None
+    if isinstance(raw, dict):
+        content = raw.get("content") or raw.get("text")
+        if content:
+            return str(content)
+        # Handle {"messages": [...]} chat format
+        if "messages" in raw:
+            return _extract_text_content(raw["messages"])
+        return None
+    if isinstance(raw, list):
+        parts = [str(msg["content"]) for msg in raw if isinstance(msg, dict) and msg.get("content")]
+        return "\n".join(parts) if parts else None
+    return None
+
+
 def _parse_langfuse_entry(rec: dict[str, object]) -> LogEntry:
     """Parse a single LangFuse record into a LogEntry.
 
@@ -49,6 +72,8 @@ def _parse_langfuse_entry(rec: dict[str, object]) -> LogEntry:
         metadata={
             k: v for k, v in rec.items() if k in ("traceId", "observationId", "userId", "tags")
         },
+        input_text=_extract_text_content(rec.get("input")),
+        output_text=_extract_text_content(rec.get("output")),
     )
 
 

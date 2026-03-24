@@ -1,8 +1,10 @@
 # LLM Cost Auditor
 
+> **Prototype / Portfolio Project** — This is a technical demonstration of production-grade AI agent engineering, not a production-ready product. The included sample data is synthetically generated to showcase the system's capabilities. Waste detection thresholds, feature complexity classifications, and model pricing are illustrative defaults that would need calibration for a real deployment.
+
 An autonomous multi-agent system that audits LLM API usage logs and delivers actionable cost optimization recommendations with estimated monthly savings.
 
-Feed it your LangFuse exports, OpenAI usage CSVs, or any generic log format. Three AI agents autonomously investigate your data, simulate optimizations, and produce a full audit report.
+Feed it your LangFuse exports, OpenAI usage CSVs, or any generic log format. Four AI agents autonomously investigate your data, evaluate quality risks, simulate optimizations, and produce a full audit report.
 
 ## Features
 
@@ -11,6 +13,7 @@ Feed it your LangFuse exports, OpenAI usage CSVs, or any generic log format. Thr
 - **Multi-format ingestion** — parses LangFuse JSON exports, OpenAI usage CSVs, and generic CSV formats
 - **Deterministic waste detection** — four algorithmic detectors (bloated prompts, wrong model, excessive retries, cacheable duplicates)
 - **Routing simulation** — simulates multi-model routing using feature-based complexity classification
+- **3-layer quality evaluation** — proxy signals from cross-model data, opt-in LLM-as-Judge blind A/B eval, and concrete per-feature eval plans with criteria and cost estimates
 - **Prioritized recommendations** — agents generate actionable optimization advice with estimated savings
 - **Deterministic fallbacks** — every agent falls back to pure computation if the LLM call fails
 - **Full observability** — every agent iteration and tool call traced in LangFuse
@@ -39,10 +42,16 @@ Input: LLM usage logs (JSON / CSV)
 └────────┬─────────┘  │  model switch estimator, feature detail │
          │            └─────────────────────────────────────────┘
          ▼
+┌──────────────────┐  Layer 1: Proxy signals (cross-model output comparison)
+│  4. Quality      │  Layer 2: LLM-as-Judge blind A/B eval (opt-in, --eval)
+│     Evaluation   │  Layer 3: Per-feature eval plans with criteria + costs
+└────────┬─────────┘  (deterministic + optional LLM calls)
+         │
+         ▼
 ┌──────────────────┐  ┌─────────────────────────────────────────┐
-│  4. Report       │──│  Agent loop: 2-3 iterations             │
+│  5. Report       │──│  Agent loop: 2-3 iterations             │
 │     Agent        │  │  Tools: cost overview, recommendations,  │
-└──────────────────┘  │  waste patterns, routing sim, drivers   │
+└──────────────────┘  │  waste patterns, routing sim, quality   │
                       └─────────────────────────────────────────┘
 Output: Markdown audit report with methodology
 ```
@@ -53,7 +62,7 @@ Output: Markdown audit report with methodology
 - The agent decides **which tools to call, in what order, and how to interpret results**
 - Numbers always come from tool computations (deterministic) — the LLM adds reasoning and prioritization
 - Every agent has a **deterministic fallback** — if the LLM fails, pure computation produces the result
-- Total: **~9 LLM iterations** across 3 agents (~$0.15-0.30 per audit)
+- Total: **~9 LLM iterations** across 3 agents + quality evaluation (~$0.15-0.30 per audit without `--eval`)
 
 ### Agent Tools
 
@@ -61,7 +70,8 @@ Output: Markdown audit report with methodology
 |-------|-------|---------------------|
 | **Analysis** | `get_dataset_summary`, `compute_cost_by_model`, `compute_cost_by_feature`, `detect_bloated_prompts`, `detect_wrong_model`, `detect_excessive_retries`, `detect_cacheable_duplicates`, `simulate_routing` | Cost patterns, waste sources, routing potential |
 | **Optimization** | `get_analysis_summary`, `simulate_routing`, `estimate_model_switch_savings`, `get_feature_detail` | Savings scenarios, feature-specific optimizations |
-| **Report** | `get_cost_overview`, `get_top_recommendations`, `get_waste_patterns`, `get_routing_simulation`, `get_top_cost_drivers` | Data points for executive summary |
+| **Quality Eval** | *(deterministic + optional LLM-as-Judge)* | Proxy signals, blind A/B quality comparison, per-feature eval plans |
+| **Report** | `get_cost_overview`, `get_top_recommendations`, `get_waste_patterns`, `get_routing_simulation`, `get_top_cost_drivers`, `get_quality_evaluation` | Data points for executive summary |
 
 ### Waste Detection Algorithms
 
@@ -109,6 +119,9 @@ cp .env.example .env
 ```bash
 # Against sample data
 uv run python -m src.main --input sample-data/example-logs.json --output reports/
+
+# With LLM-as-Judge quality evaluation (requires prompt content in logs, costs extra)
+uv run python -m src.main --input logs-with-content.json --output reports/ --eval
 
 # Against your own logs
 uv run python -m src.main --input /path/to/your/logs.json --output reports/
@@ -184,6 +197,7 @@ llm-cost-auditor/
 │   │   ├── analysis.py        # Analysis agent + deterministic fallback
 │   │   ├── optimization.py    # Optimization agent + deterministic fallback
 │   │   ├── routing_sim.py     # Routing simulation (deterministic)
+│   │   ├── quality_eval.py    # Quality evaluation (3 layers)
 │   │   └── report.py          # Report agent + single-call fallback
 │   ├── tools/
 │   │   ├── registry.py        # Tool registry + schema generation
@@ -195,7 +209,8 @@ llm-cost-auditor/
 │   │   ├── analysis.py        # Analysis results schema
 │   │   ├── recommendation.py  # Recommendation schema
 │   │   ├── report.py          # Final report schema
-│   │   ├── features.py        # Feature complexity classification
+│   │   ├── features.py        # Feature complexity + audit config
+│   │   ├── quality.py         # Quality evaluation models (3 layers)
 │   │   └── agent_result.py    # Agent execution result schema
 │   ├── parsers/
 │   │   ├── langfuse.py        # LangFuse JSON export parser
@@ -207,6 +222,7 @@ llm-cost-auditor/
 │       ├── llm_client.py      # Unified LLM client (text + tool use)
 │       ├── langfuse_setup.py  # LangFuse initialization
 │       ├── dataset_summary.py # Dataset summarization for agent context
+│       ├── model_utils.py     # Shared model classification
 │       ├── retry.py           # Exponential backoff retry
 │       ├── json_extract.py    # JSON extraction from LLM responses
 │       └── config.py          # Environment config loader
@@ -215,7 +231,8 @@ llm-cost-auditor/
 │   ├── test_tools.py          # Tool handler tests (no LLM)
 │   ├── test_analysis.py       # Waste detection algorithm tests
 │   ├── test_parsers.py        # Parser tests against sample data
-│   └── test_models.py         # Pydantic model validation tests
+│   ├── test_models.py         # Pydantic model validation tests
+│   └── test_quality_eval.py   # Quality evaluation tests (49 tests)
 ├── scripts/
 │   └── generate_sample_data.py # Deterministic sample data generator
 ├── sample-data/
@@ -234,7 +251,7 @@ llm-cost-auditor/
 # Install with dev dependencies
 uv sync --dev
 
-# Run tests (65 tests, no API key needed)
+# Run tests (119 tests, no API key needed)
 uv run pytest tests/ -v
 
 # Lint and format
@@ -249,12 +266,13 @@ python3 scripts/generate_sample_data.py
 
 See [`sample-data/example-report.md`](sample-data/example-report.md) for a full audit report.
 
-**Summary from a 5,084-entry dataset:**
-- Total cost: $240.09 over 29 days ($248/month projected)
-- 3 agents investigated autonomously (~9 tool-use iterations)
-- 4 waste patterns identified with exact methodology
-- 7 prioritized recommendations with implementation steps
-- Potential savings: $203/month (82% reduction)
+**Summary from a 5,084-entry synthetic dataset:**
+- Total cost: $240 over 29 days ($248/month projected)
+- 4 agents investigated autonomously (~9 tool-use iterations)
+- 4 waste patterns identified with confidence levels and methodology
+- 3-layer quality evaluation (proxy signals, judge eval, eval plans)
+- Prioritized recommendations with implementation steps
+- Potential savings: ~$78/month (32% reduction)
 
 ## Tech Stack
 

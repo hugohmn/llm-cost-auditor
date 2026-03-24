@@ -22,6 +22,7 @@ from src.models.analysis import (
 from src.models.features import AuditConfig, TaskComplexity
 from src.models.log_entry import LogDataset, LogEntry
 from src.utils.llm_client import UnifiedLLMClient, estimate_cost
+from src.utils.model_utils import is_light_model as _is_light_model
 
 logger = logging.getLogger(__name__)
 
@@ -35,31 +36,27 @@ and quantifying their impact.
 WORKFLOW:
 1. Start with get_dataset_summary to understand the data
 2. Run compute_cost_by_model and compute_cost_by_feature for breakdowns
-3. Run each waste detector to find specific waste patterns
-4. Optionally run simulate_routing to quantify routing savings
+3. Run ALL waste detectors to find specific waste patterns
+4. Run simulate_routing to quantify routing savings (skip only if all \
+calls already use light models)
 5. Synthesize all findings into a structured JSON analysis
 
 OUTPUT FORMAT: After gathering all data, output a JSON object:
 {
   "findings_summary": "2-3 sentence overview of key findings",
-  "key_insights": ["insight1", "insight2", ...],
-  "additional_observations": "Any patterns not captured by standard detectors"
+  "key_insights": ["insight1", "insight2", ...]
 }
 
 RULES:
 - Always call get_dataset_summary first
 - Use EXACT numbers from tool results — do not estimate or round differently
 - If a waste detector returns null, note it as "not detected" — do not invent waste
+- If ALL detectors return null, say so clearly — do not speculate about hypothetical waste
 - Be specific: name models, features, and dollar amounts
 - NEVER claim "quality retention" percentages — error rates measure API failures, \
-not output quality. You may compare observed error rates between models, but do NOT \
-extrapolate them into a quality retention score"""
-
-
-def _is_light_model(model: str) -> bool:
-    """Check if a model is a light/cheap model."""
-    lower = model.lower()
-    return "haiku" in lower or "mini" in lower
+not output quality. Do NOT fabricate quality scores or assert that routing is "safe"
+- Quality assessment is handled by a separate evaluation step — do not pre-empt \
+quality conclusions in your analysis"""
 
 
 def compute_cost_by_model(
@@ -598,14 +595,12 @@ async def _run_agentic_analysis(
     """Internal: run the agentic analysis loop."""
     from src.agents.base import run_agent_loop
     from src.tools.analysis_tools import build_analysis_registry
-    from src.utils.dataset_summary import summarize_dataset
 
     registry = build_analysis_registry(dataset, config)
-    summary = summarize_dataset(dataset)
 
     initial_message = (
-        "Analyze this LLM usage dataset and identify all waste patterns.\n\n"
-        f"Dataset overview:\n{json.dumps(summary, indent=2)}"
+        "Analyze this LLM usage dataset and identify all waste patterns. "
+        "Start by calling get_dataset_summary, then run all detectors."
     )
 
     agent_result = await run_agent_loop(

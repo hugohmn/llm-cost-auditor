@@ -56,12 +56,16 @@ OUTPUT FORMAT: After investigation, output ONLY a JSON array of recommendations:
 RULES:
 - Base ALL savings numbers on tool results — never invent figures
 - Each recommendation must be specific and actionable (not "consider optimizing")
-- Priority 1 = highest impact, easiest to implement
-- Provide 3-7 recommendations, covering routing, caching, and prompt optimization
+- Priority 1 = highest ROI (best balance of impact and effort)
+- Provide 3-7 recommendations where data supports them. If fewer than 3 genuine \
+opportunities exist, provide fewer — do not pad with generic advice
+- Only recommend categories where the relevant data shows savings > $0
 - Use exact dollar amounts from simulations
 - NEVER claim "quality retention" percentages — error rates measure API failures \
-only, not output quality. State observed error rates when relevant, but do NOT \
-fabricate quality scores or retention metrics"""
+only, not output quality. Do NOT fabricate quality scores
+- When recommending model switches or routing, state that output quality validation \
+is required before production deployment — do not assert routing is "safe" \
+without quality evaluation data"""
 
 
 async def run_optimization_agent(

@@ -38,6 +38,8 @@ def _parse_generic_row(row: dict[str, str]) -> LogEntry:
         latency_ms=float(row["latency_ms"]) if row.get("latency_ms") else None,
         feature=row.get("feature", "").strip() or None,
         status=row.get("status", "success").strip(),
+        input_text=row.get("input_text", "").strip() or None,
+        output_text=row.get("output_text", "").strip() or None,
     )
 
 

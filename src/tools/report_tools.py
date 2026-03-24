@@ -9,6 +9,7 @@ import logging
 
 from src.models.analysis import AnalysisResult
 from src.models.log_entry import LogDataset
+from src.models.quality import JudgeEvalNotRun, QualityAssessment
 from src.models.recommendation import OptimizationPlan
 from src.tools.registry import ToolRegistry
 
@@ -88,12 +89,85 @@ def build_report_registry(
     dataset: LogDataset,
     analysis: AnalysisResult,
     optimization: OptimizationPlan,
+    quality: QualityAssessment | None = None,
 ) -> ToolRegistry:
     """Create tool registry for the report agent."""
     registry = ToolRegistry()
     _register_overview_tools(registry, analysis, optimization)
     _register_detail_report_tools(registry, analysis, optimization)
+    if quality:
+        _register_quality_tool(registry, quality)
     return registry
+
+
+def _register_quality_tool(
+    registry: ToolRegistry,
+    quality: QualityAssessment,
+) -> None:
+    """Register quality evaluation tool for the report agent."""
+    registry.register(
+        name="get_quality_evaluation",
+        description=(
+            "Get quality evaluation results: proxy signal comparisons "
+            "between frontier and light models per feature, LLM-as-Judge "
+            "results if available, and evaluation plans for routing changes."
+        ),
+        handler=lambda _: _quality_summary(quality),
+    )
+
+
+def _quality_summary(quality: QualityAssessment) -> str:
+    """Build compact quality evaluation summary for the report agent."""
+    sections: list[str] = []
+
+    # Proxy signals
+    proxy = quality.proxy_signals
+    if proxy.feature_signals:
+        signals = [
+            {
+                "feature": s.feature,
+                "output_ratio": s.output_ratio,
+                "confidence": s.confidence.value,
+                "interpretation": s.interpretation,
+            }
+            for s in proxy.feature_signals
+        ]
+        sections.append(json.dumps({"proxy_signals": signals}, indent=2))
+
+    if proxy.features_without_comparison:
+        sections.append(
+            f"Features without light model data: {', '.join(proxy.features_without_comparison)}"
+        )
+
+    # Judge eval
+    judge = quality.judge_eval
+    if isinstance(judge, JudgeEvalNotRun):
+        sections.append(f"Judge evaluation: not run ({judge.reason})")
+    else:
+        results = [
+            {
+                "feature": r.feature,
+                "verdict": r.verdict.value,
+                "mean_delta": r.mean_quality_delta,
+                "sample_size": r.sample_size,
+            }
+            for r in judge.feature_results
+        ]
+        sections.append(
+            json.dumps(
+                {"judge_eval": results, "cost": judge.total_eval_cost_usd},
+                indent=2,
+            )
+        )
+
+    # Eval plans count
+    plans = quality.eval_plans
+    sections.append(
+        f"Eval plans: {len(plans.feature_plans)} features, "
+        f"${plans.total_estimated_cost_usd:.2f} estimated cost"
+    )
+
+    return "\n\n".join(sections)
 
 
 def _cost_overview(analysis: AnalysisResult) -> str:

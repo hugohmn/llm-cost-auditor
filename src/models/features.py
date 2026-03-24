@@ -107,6 +107,31 @@ class AuditConfig(BaseModel):
         ),
     )
 
+    # ── Quality evaluation ────────────────────────────────────────
+    enable_judge_eval: bool = Field(
+        default=False,
+        description="Run LLM-as-Judge evaluation (costs money for replay + judge calls).",
+    )
+    judge_eval_sample_size: int = Field(
+        default=20,
+        ge=5,
+        le=100,
+        description="Samples per feature for LLM-as-Judge.",
+    )
+    judge_model: str = Field(
+        default="claude-sonnet-4-6",
+        description="Model used as judge in Layer 2 evaluation.",
+    )
+    proxy_min_samples: int = Field(
+        default=10,
+        description="Min calls per model tier per feature for proxy signal comparison.",
+    )
+    judge_max_budget_usd: float = Field(
+        default=5.0,
+        ge=0.01,
+        description="Hard cap on total Layer 2 evaluation spend.",
+    )
+
     @property
     def routable_features(self) -> frozenset[str]:
         """Features eligible for routing and bloat detection."""
